@@ -1,0 +1,21 @@
+listen: ":8080"
+
+# One backend per GPU-pinned Ollama instance (service names from docker-compose.yml).
+# max_concurrent mirrors OLLAMA_NUM_PARALLEL on each instance — a hard ceiling,
+# like nginx max_conns, but enforced with atomic reservation instead of best-effort.
+backends:
+  - name: ollama-1
+    url: "http://ollama-1:11434"
+    max_concurrent: 2
+  - name: ollama-2
+    url: "http://ollama-2:11434"
+    max_concurrent: 2
+  - name: ollama-3
+    url: "http://ollama-3:11434"
+    max_concurrent: 2
+  - name: ollama-4
+    url: "http://ollama-4:11434"
+    max_concurrent: 2
+
+# Uncomment if LoxyRouter is reachable beyond localhost:
+# api_keys: ["sk-your-secret"]

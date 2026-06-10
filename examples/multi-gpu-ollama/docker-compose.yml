@@ -1,0 +1,83 @@
+# Multi-GPU Ollama behind LoxyRouter.
+#
+# This is the officially recommended workaround from ollama/ollama#9054
+# (one Ollama server per GPU, load-balancing proxy in front) with the nginx
+# `least_conn` block replaced by LoxyRouter. Unlike nginx, LoxyRouter knows
+# which models are loaded where (`/api/ps`), streams SSE without buffering,
+# guards against VRAM exhaustion, and supports priority tiers — see README.md.
+version: "3.9"
+
+x-ollama: &ollama
+  image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
+  volumes:
+    # One shared model store: weights are downloaded once, used by all instances.
+    - ${OLLAMA_MODELS-ollama-models}:/root/.ollama
+  environment: &env
+    OLLAMA_KEEP_ALIVE: "-1"     # never unload — LoxyRouter routes around warm models
+    OLLAMA_NUM_PARALLEL: "2"    # completion slots per instance; match max_concurrent below
+
+services:
+  ollama-1:
+    <<: *ollama
+    environment:
+      <<: *env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+
+  ollama-2:
+    <<: *ollama
+    environment:
+      <<: *env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+
+  ollama-3:
+    <<: *ollama
+    environment:
+      <<: *env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]
+              capabilities: [gpu]
+
+  ollama-4:
+    <<: *ollama
+    environment:
+      <<: *env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["3"]
+              capabilities: [gpu]
+
+  loxy-router:
+    image: ghcr.io/mageshkrishna/loxy-router:latest
+    volumes:
+      - ./loxyrouter.yaml:/config.yaml:ro
+    command: ["-config", "/config.yaml"]
+    ports:
+      # Listen on the host's 11434 so existing Ollama clients work unchanged.
+      - "11434:8080"
+    depends_on:
+      - ollama-1
+      - ollama-2
+      - ollama-3
+      - ollama-4
+
+volumes:
+  ollama-models:

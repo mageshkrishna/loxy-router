@@ -107,6 +107,8 @@ A healthy `/status` shows every backend `"status": "up"`, with `warm` and `loade
 
 A backend stuck at `"status": "down"` means LoxyRouter can't reach it — check the `url` in your config and that the backend is up.
 
+> **Running multiple GPUs?** Ollama won't load the same model on more than one GPU ([ollama#9054](https://github.com/ollama/ollama/issues/9054)); the fix is one Ollama instance per GPU with a router in front. See [`examples/multi-gpu-ollama`](examples/multi-gpu-ollama) for a ready-to-run Docker Compose setup.
+
 ---
 
 ## Configuration
