@@ -47,7 +47,10 @@ LoxyRouter keeps each model **pinned to where it's already hot** and routes arou
 ## Quickstart
 
 ```bash
-# Build (single static binary, no CGO)
+# Install with Go (or grab a prebuilt binary from the Releases page)
+go install github.com/mageshkrishna/loxy-router@latest
+
+# Or build from source (single static binary, no CGO)
 git clone https://github.com/mageshkrishna/loxy-router && cd loxy-router
 go build -o loxy-router .
 
@@ -67,6 +70,42 @@ curl localhost:8080/v1/chat/completions \
 ```
 
 > **Heads-up:** vLLM strictly requires `Content-Type: application/json`. LoxyRouter forwards your headers verbatim — it never rewrites request bodies — so set the header on the client (Ollama is lenient; vLLM is not).
+
+### Verify it's working
+
+```bash
+curl localhost:8080/health
+# {"status":"ok"}
+
+# Live routing state (add -H "Authorization: Bearer <key>" if api_keys is set)
+curl localhost:8080/status
+```
+
+A healthy `/status` shows every backend `"status": "up"`, with `warm` and `loaded_models` reflecting what's resident in VRAM:
+
+```json
+{
+  "gate": { "max_inflight": 64, "inflight": 0, "queued": { "interactive": 0, "batch": 0, "background": 0 } },
+  "backends": [
+    {
+      "name": "ollama-gpu",
+      "url": "http://localhost:11434",
+      "type": "ollama",
+      "status": "up",
+      "warm": true,
+      "loaded_models": ["llama3.2:1b"],
+      "vram_used_pct": 0.31,
+      "queue_depth": 0,
+      "inflight": 0,
+      "effective_concurrent": 8,
+      "per_token_ms": 18,
+      "last_scraped": "2026-06-10T12:00:00Z"
+    }
+  ]
+}
+```
+
+A backend stuck at `"status": "down"` means LoxyRouter can't reach it — check the `url` in your config and that the backend is up.
 
 ---
 
