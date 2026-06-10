@@ -199,7 +199,11 @@ func (s *Scheduler) score(b *Backend, model string) float64 {
 		expectedMs = float64(load+1) * reqMs
 	} else {
 		// Cold: pay the swap penalty up front, then queue behind existing load.
-		expectedMs = coldLoadMs + float64(load)*reqMs
+		// The penalty scales with the target's VRAM usage: loading onto a fuller
+		// backend risks evicting a model someone else keeps warm (and paying its
+		// reload later), so among cold candidates an empty backend wins. Loading
+		// where another model is resident costs up to 2× the base penalty.
+		expectedMs = coldLoadMs*(1+st.VRAMUsedPct) + float64(load)*reqMs
 	}
 
 	return 1.0 / expectedMs

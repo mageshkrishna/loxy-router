@@ -292,6 +292,38 @@ func TestMultiModelWarm(t *testing.T) {
 	}
 }
 
+// TestColdPlacementAvoidsEviction reproduces the 4×A40 GPU finding: a cold
+// request must prefer an empty backend over one whose VRAM is mostly occupied
+// by another model, otherwise the load evicts a model someone else keeps warm.
+func TestColdPlacementAvoidsEviction(t *testing.T) {
+	store := NewStateStore()
+	// busy holds a 32B model (77% VRAM) warm; empty has nothing resident.
+	store.Set("busy", BackendState{ModelStatus: ModelWarm, LoadedModels: []string{"qwen3:32b"}, VRAMUsedPct: 0.77})
+	store.Set("empty", BackendState{ModelStatus: ModelCold})
+	busy := &Backend{Name: "busy", Type: "ollama"}
+	empty := &Backend{Name: "empty", Type: "ollama"}
+	s := NewScheduler(nil, store, nil)
+
+	// Both are cold for llama3.1 — the empty backend must score higher even
+	// though the busy one comes first in the candidate list.
+	got, err := s.pick("llama3.1:8b", []*Backend{busy, empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "empty" {
+		t.Fatalf("cold request routed to %q (would evict qwen3:32b); want the empty backend", got.Name)
+	}
+
+	// Sanity: for the model the busy backend already holds, it must still win.
+	got, err = s.pick("qwen3:32b", []*Backend{busy, empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "busy" {
+		t.Fatalf("warm request routed to %q; want the backend already holding the model", got.Name)
+	}
+}
+
 func TestAutoConcurrent(t *testing.T) {
 	const MB = int64(1024 * 1024)
 	const GB = 1024 * MB

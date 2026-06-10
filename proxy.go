@@ -116,15 +116,17 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// load, prompt processing, and queue wait — otherwise a backend that just
 		// did a cold load looks slow and we route traffic away from the very backend
 		// we just warmed. stream() reports the decode-only figure (from the engine's
-		// own eval_duration when available, else the first-token→last-token window);
-		// we only fall back to wall-clock/tokens if neither was obtainable.
+		// own eval_duration when available, else the first-token→last-token window).
+		// A non-streamed body with no engine timing carries NO decode-only signal:
+		// wall-clock/tokens would fold a cold load into the EWMA (a 70s load ÷ 10
+		// tokens reads as 7000 ms/token and starves the warm backend), so in that
+		// case we record nothing and let the EWMA keep its previous (or default)
+		// value. The log line still shows the coarse wall-clock figure.
 		tokens := res.tokens
 		perTokenMs := res.perTokenMs
-		if perTokenMs <= 0 {
-			perTokenMs = latencyMs / int64(tokens)
-		}
-		if perTokenMs < 1 {
-			perTokenMs = 1
+		logPerTokenMs := perTokenMs
+		if logPerTokenMs <= 0 {
+			logPerTokenMs = latencyMs / int64(tokens)
 		}
 
 		// Only learn from a SUCCESSFUL response: a fast error (e.g. instant 500/429)
@@ -134,7 +136,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Skip learning if the client disconnected mid-stream: the token count is
 		// truncated, so the per-token latency would be misleadingly high.
 		if status >= 200 && status < 300 && r.Context().Err() == nil {
-			backend.RecordPerTokenMs(perTokenMs)
+			if perTokenMs > 0 {
+				backend.RecordPerTokenMs(perTokenMs)
+			}
 			p.sched.RecordConversation(req, backend.Name)
 		}
 
@@ -153,7 +157,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"retries", retries,
 			"latency_ms", latencyMs,
 			"tokens", tokens,
-			"per_token_ms", perTokenMs,
+			"per_token_ms", logPerTokenMs,
 		)
 		return
 	}
