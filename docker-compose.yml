@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  ollama-1:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-1-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ollama-2:
+    image: ollama/ollama
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama-2-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  loxy-router:
+    # Use the published image, or build from source by uncommenting `build: .`
+    image: ghcr.io/mageshkrishna/loxy-router:latest
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    command: ["-config", "/config.yaml"]
+    depends_on:
+      - ollama-1
+      - ollama-2
+
+volumes:
+  ollama-1-data:
+  ollama-2-data:

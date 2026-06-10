@@ -1,0 +1,37 @@
+# Compiled binaries / build output
+/loxy-router
+/loxyrouter
+/inference-scheduler
+/scheduler
+/loxy
+/dist/
+*.exe
+*.test
+*.out
+*.prof
+
+# Go
+go.work
+go.work.sum
+
+# Test / coverage
+coverage.txt
+coverage.html
+
+# Secrets & local config — never commit real keys
+*.env
+.env
+config.local.yaml
+
+# Personal Claude Code overrides (contains machine-local permission settings)
+.claude/settings.local.json
+
+# Editor / OS cruft
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Logs
+*.log

@@ -1,0 +1,80 @@
+listen: ":8080"
+
+# ── Phase 3 options (all optional) ──────────────────────────────────────────
+#
+# api_keys: INBOUND auth (client → scheduler). When set, every /v1, /api, and
+#   /status request must send "Authorization: Bearer <key>". Leave empty to run
+#   open. Always set this if the scheduler is reachable beyond localhost.
+# api_keys:
+#   - "sk-your-secret-key"
+#
+# backend_api_key: OUTBOUND auth (scheduler → backend), the default credential
+#   sent to every backend. When set for a backend, the scheduler strips the
+#   client's Authorization and sends this instead, so client keys never leak
+#   downstream. A backend can override it with its own api_key (below). Leave
+#   empty for default Ollama, which has no auth. Useful for vLLM --api-key.
+# backend_api_key: "backend-shared-secret"
+#
+# Concurrency: set max_concurrent PER BACKEND (below) to match each one's real
+#   capacity. The system's total capacity is the live sum of all backend caps;
+#   when every backend is full, waiting requests are served in priority order
+#   (X-Priority header: interactive > batch > background). There is no global
+#   concurrency switch — the priority gate engages automatically once every
+#   backend has a cap (a backend without one is auto-sized from its VRAM).
+#
+# queue: per-priority limits on how many requests may wait before new arrivals
+#   of that tier are rejected with 503 (admission control). Defaults shown.
+# queue:
+#   interactive: 50
+#   batch: 200
+#   background: 100
+#
+# Session affinity is automatic: send a stable X-Conversation-Id header and
+# follow-up turns route back to the backend holding that conversation's KV cache.
+# NOTE: affinity (and all scheduler state) is in-memory — run a SINGLE instance
+# behind your load balancer for v1. Multiple instances won't share affinity.
+#
+# timeouts: network deadlines that catch a dead/wedged backend without cutting
+#   off legitimate long streams. Both optional; defaults shown.
+# timeouts:
+#   response_header_secs: 120  # max wait for a backend's response headers. Must
+#                              # exceed a cold model load (~25s); does NOT limit
+#                              # streaming once headers arrive. Raise it if you
+#                              # serve slow NON-streaming completions.
+#   shutdown_secs: 30          # how long SIGTERM/SIGINT drains in-flight requests
+#                              # before forcing exit (graceful shutdown).
+
+backends:
+  # Ollama backend — scheduler polls /api/ps to detect model warmth.
+  # vram_total_mb is optional but enables the VRAM guard (blocks routing
+  # when the backend is above 90% VRAM usage to prevent OOM crashes).
+  #
+  # max_concurrent: per-backend cap. Set to match real GPU capacity:
+  #   Ollama on GPU → 4–8   vLLM on A100 → 30–50   CPU inference → 1–2
+  # 0 or omitted = auto-computed from VRAM (never left unlimited).
+  #
+  # api_key: credential the scheduler sends to THIS backend, overriding the
+  #   global backend_api_key. Omit to inherit the global (or no auth).
+  - name: ollama-1
+    url: "http://localhost:11434"
+    type: ollama
+    vram_total_mb: 15715  # ~16 GB system RAM (CPU inference)
+    max_concurrent: 4
+    models:
+      - llama3.2:1b
+
+  - name: ollama-2
+    url: "http://localhost:11435"
+    type: ollama
+    vram_total_mb: 15715
+    max_concurrent: 4
+    models:
+      - llama3.2:1b
+
+  # vLLM backend — scheduler polls /metrics for VRAM and queue depth.
+  # vram_total_mb is not needed: vLLM reports gpu_cache_usage_perc directly.
+  # - name: vllm-1
+  #   url: "http://localhost:8000"
+  #   type: vllm
+  #   models:
+  #     - mistral-7b
