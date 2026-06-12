@@ -222,6 +222,8 @@ Tested on rented **NVIDIA A40s (48 GB, single and 4-GPU)** with real Ollama and 
 
 > LoxyRouter is a thin, transparent layer — throughput is whatever your backends can do. Its value is *which* backend it picks, not raw speed.
 
+Testing on real hardware found two routing bugs that small models can't expose — the write-up is on the blog: [Two routing bugs I could only find by renting 4×A40s](https://mageshkrishna.github.io/2026/06/12/two-routing-bugs-4xa40.html).
+
 ---
 
 ## Architecture
