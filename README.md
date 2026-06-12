@@ -22,10 +22,12 @@ Run more than one model on your own GPUs and you hit a wall the cloud APIs hide 
 A naive round-robin or least-connections load balancer makes this *worse*: it scatters requests across backends, so every backend keeps evicting and reloading the same models. The GPUs spend their time swapping weights instead of generating tokens.
 
 <p align="center">
-  <img src="docs/comparison.svg" alt="Plain load balancer vs. LoxyRouter: a model-unaware balancer scatters requests and forces constant model reloads (worst case 37s/request), while LoxyRouter keeps each model warm on one backend (~0.7s/request)." width="900">
+  <img src="docs/comparison.svg" alt="Plain load balancer vs. LoxyRouter: a model-unaware balancer scatters requests and forces constant model reloads (measured: 70s cold load for qwen3:32b), while LoxyRouter keeps each model warm on one backend (~1s/request)." width="900">
 </p>
 
 LoxyRouter keeps each model **pinned to where it's already hot** and routes around the swap.
+
+Not sure you need it? See the honest comparison — [when to use nginx, llama-swap, Olla, LiteLLM, or LoxyRouter](docs/comparison.md).
 
 ---
 
@@ -206,11 +208,13 @@ LoxyRouter is a single binary. What it handles for you, and what you put in fron
 
 ## What's validated
 
-Tested on a rented **NVIDIA A40 (48 GB)** with real Ollama and vLLM 0.11.0 backends:
+Tested on rented **NVIDIA A40s (48 GB, single and 4-GPU)** with real Ollama and vLLM 0.11.0 backends:
 
 | Claim | Result |
 |---|---|
 | **Warmth routing eliminates thrash** | Cold load **37 s** → warm hit **~0.7 s** for the same request |
+| **Holds up with 32B models (4×A40)** | qwen3:32b truly cold: **70 s**; page-cache reload: **~8 s**; warm: **~1.0 s**. Multi-model placement landed each model on its own GPU; spill-under-load avoided every warm host |
+| **Failover skips the cold load** | Backend killed mid-test → rerouted to the *other warm* backend in **2.9 s** (HTTP 200, no reload); self-healed after restart |
 | **Proxy overhead is negligible** | **+8 ms** p50, ~0 at p95 vs. hitting the backend directly |
 | **Robust under load** | 0 errors across ~450 concurrent requests; admission gate always settled to 0 |
 | **Memory is bounded** | RSS scales linearly with concurrency × body size; no leak (10 MB idle → 125 MB at 100×512 KB) |

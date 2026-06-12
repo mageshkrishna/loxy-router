@@ -5,10 +5,13 @@
 # `least_conn` block replaced by LoxyRouter. Unlike nginx, LoxyRouter knows
 # which models are loaded where (`/api/ps`), streams SSE without buffering,
 # guards against VRAM exhaustion, and supports priority tiers — see README.md.
-version: "3.9"
 
 x-ollama: &ollama
   image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
+  # Instances share one model store; if they all start at once on an empty
+  # store, a loser of the mkdir race can crash on first boot — the restart
+  # policy absorbs that (and host reboots).
+  restart: unless-stopped
   volumes:
     # One shared model store: weights are downloaded once, used by all instances.
     - ${OLLAMA_MODELS-ollama-models}:/root/.ollama
@@ -67,6 +70,7 @@ services:
 
   loxy-router:
     image: ghcr.io/mageshkrishna/loxy-router:latest
+    restart: unless-stopped
     volumes:
       - ./loxyrouter.yaml:/config.yaml:ro
     command: ["-config", "/config.yaml"]

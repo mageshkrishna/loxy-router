@@ -30,11 +30,18 @@ model-aware one does it by default.
 
 ## Run it
 
+Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+(`nvidia-smi` must work, and `docker info` should list the `nvidia` runtime).
+
 ```bash
 docker compose up -d
 
 # Pull a model once (shared volume — all instances see it)
 docker compose exec ollama-1 ollama pull llama3.2:1b
+
+# Backends start as "down" and flip to "up" on the first scrape (~5 s).
+# Wait until all four show "status": "up" before sending traffic:
+curl -s localhost:11434/status
 
 # LoxyRouter listens on the host's 11434, so existing clients work unchanged
 curl localhost:11434/v1/chat/completions \
